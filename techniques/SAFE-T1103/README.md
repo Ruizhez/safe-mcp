@@ -61,4 +61,57 @@ Attackers abuse lax validation or character tricks (e.g., Unicode homoglyphs, ze
   "arguments": { "path": "/etc/shadow" }
 }
 ~~~
-If the host fails to normalize/validate Unicode or compare against the exact registered tool identifier, this spoofed invocation may be treated as legitimate and execute..
+## Mitigation – Man-in-the-Middle (AiTM) Substitution
+
+**Goal:** Prevent an attacker on the wire from swapping a legitimate function call with a forged one.
+
+### Controls
+- **Message Authenticity:** Sign the entire function-call payload (e.g., Ed25519/JWS). Host must verify the signature **before** execution.
+- **Origin Binding:** Bind each call to `agent_id`, `session_id`, and `turn_id`; verify they match the authenticated channel (mTLS/public key).
+- **Anti-Replay:** Require `nonce` + `issued_at` and keep a short-lived ledger of seen nonces; drop duplicates/stale calls.
+- **Manifest/ID Check:** Execute **only** tools whose stable `tool_id` exists in the signed manifest (do not rely on display names).
+
+### Call Payload (fields)
+~~~json
+{
+  "type": "function_call",
+  "name": "download_credentials",
+  "arguments": {},
+  "agent_id": "agent-123",
+  "session_id": "sess-abc",
+  "turn_id": 42,
+  "nonce": "0x9f3c...e1",
+  "issued_at": 1725000000,
+  "sig": "ed25519:MEUCIQ..."
+}
+~~~
+
+### Verification Pseudocode
+~~~python
+assert call["type"] == "function_call"
+
+# 1) Verify signature over the canonicalized payload (excluding 'sig')
+if not verify_sig(canonical_without_sig(call), key_for(call["agent_id"])):
+    reject("bad signature")
+
+# 2) Bind to authenticated origin/session
+if call["session_id"] != ctx.session_id or call["agent_id"] != ctx.agent_id:
+    reject("origin/session mismatch")
+
+# 3) Anti-replay
+if is_replayed(call["nonce"], call["issued_at"]):
+    reject("replay detected")
+
+# 4) Manifest & name hardening
+tool_id = normalize_nfkc(call["name"])
+if not NAME_RE.match(tool_id): reject("invalid tool identifier")
+if tool_id not in SIGNED_MANIFEST.tool_ids: reject("unregistered tool")
+
+execute(tool_id, call["arguments"])
+~~~
+
+### Quick Test Checklist
+- [ ] Tamper any byte → signature verification fails → **blocked**  
+- [ ] Change `session_id/agent_id` → origin mismatch → **blocked**  
+- [ ] Resend same `nonce` → replay detected → **blocked**  
+- [ ] Use unregistered or homoglyph tool name → manifest/name check → **blocked**
