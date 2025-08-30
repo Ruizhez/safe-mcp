@@ -1,3 +1,21 @@
+# SAFE-T1103: Fake Tool Invocation (Function Spoofing)
+
+## Overview
+- **Tactic**: Execution (ATK-TA0002)  
+- **Technique ID**: SAFE-T1103  
+- **Severity**: High  
+- **First Observed**: 2024 (Community Red-Teaming Reports)  
+- **Last Updated**: 2025-08-30  
+
+---
+
+## Description
+Fake Tool Invocation (Function Spoofing) is an execution technique where adversaries forge JSON messages that mimic legitimate MCP function-call messages.  
+If the host does not strictly validate tool invocations against its registered manifest, it may execute tools that were never offered, enabling arbitrary or malicious actions.  
+
+This technique exploits weak schema validation and over-trusted message parsing in MCP hosts. Unlike prompt injection, which manipulates model behavior, function spoofing directly abuses the communication protocol to trigger unauthorized tool execution.
+
+---
 ## Attack Scenario
 
 ### 1. Direct JSON Forgery
